@@ -2,9 +2,17 @@ import { RabbitMQUpdatesClient } from './rabbitmq.js';
 import { config } from './config.js';
 import { Chat3UserBotClient } from './chat3Client.js';
 import { UpdateHandlers } from './updateHandlers.js';
+import { DialogMetaManager } from './dialogMetaManager.js';
+import { AIClassifier } from './aiClassifier.js';
+import { DialogStateManager } from './dialogStateManager.js';
+import { MessageHandler } from './messageHandler.js';
 
 const bot = new RabbitMQUpdatesClient();
 const chat3Client = new Chat3UserBotClient();
+const metaManager = new DialogMetaManager();
+const aiClassifier = new AIClassifier();
+const stateManager = new DialogStateManager();
+const messageHandler = new MessageHandler();
 
 // Обработка сигналов завершения
 const shutdown = async (signal) => {
@@ -55,6 +63,32 @@ async function start() {
       } else {
         console.log(`Пользователь-бот ${userId} уже существует в системе`);
       }
+
+      // Инициализируем DialogMetaManager
+      metaManager.setChat3Client(chat3Client);
+      console.log('DialogMetaManager инициализирован');
+
+      // Инициализируем AIClassifier
+      if (config.gigachat.clientId && config.gigachat.clientSecret) {
+        aiClassifier.init(config.gigachat.clientId, config.gigachat.clientSecret, {
+          model: config.gigachat.model,
+          temperature: config.gigachat.temperature,
+          maxTokens: config.gigachat.maxTokens,
+        });
+        console.log('AIClassifier инициализирован');
+      } else {
+        console.warn('GigaChat Client ID или Client Secret не настроены, AI классификация будет недоступна');
+      }
+
+      // Инициализируем DialogStateManager
+      stateManager.setChat3Client(chat3Client);
+      stateManager.setMetaManager(metaManager);
+      console.log('DialogStateManager инициализирован');
+
+      // Инициализируем MessageHandler
+      messageHandler.init(chat3Client, metaManager, aiClassifier, stateManager);
+      UpdateHandlers.setMessageHandler(messageHandler);
+      console.log('MessageHandler инициализирован');
     } else {
       console.warn('Chat3 API URL, API Key или Tenant ID не настроены');
       process.exit(1);

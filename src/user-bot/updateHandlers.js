@@ -1,4 +1,5 @@
 import { config } from './config.js';
+import { MessageHandler } from './messageHandler.js';
 
 /**
  * Обработчик updates из RabbitMQ
@@ -6,6 +7,7 @@ import { config } from './config.js';
  */
 export class UpdateHandlers {
   static chat3Client = null;
+  static messageHandler = null;
 
   /**
    * Установка клиента Chat3 API
@@ -13,6 +15,14 @@ export class UpdateHandlers {
    */
   static setChat3Client(client) {
     this.chat3Client = client;
+  }
+
+  /**
+   * Установка обработчика сообщений
+   * @param {MessageHandler} handler - Экземпляр обработчика
+   */
+  static setMessageHandler(handler) {
+    this.messageHandler = handler;
   }
 
   /**
@@ -51,15 +61,20 @@ export class UpdateHandlers {
 
       // Обработка различных типов событий сообщений
       if (eventType === 'message.create') {
-        // Отвечаем только на новые сообщения
-        if (this.chat3Client) {
-          await this.chat3Client.sendMessage(
-            message.dialogId,
-            'Привет! Я получил ваше сообщение.'
-          );
-          console.log(`Ответ отправлен в диалог ${message.dialogId}`);
+        // Используем MessageHandler для обработки входящих сообщений
+        if (this.messageHandler) {
+          const result = await this.messageHandler.handleIncomingMessage(update);
+          if (result.success) {
+            console.log(`Сообщение обработано в диалоге ${message.dialogId}`, {
+              handled: result.handled,
+              intent: result.intent,
+              category: result.category,
+            });
+          } else {
+            console.error(`Ошибка обработки сообщения:`, result.error);
+          }
         } else {
-          console.warn('Chat3Client не установлен, невозможно отправить ответ');
+          console.warn('MessageHandler не установлен, невозможно обработать сообщение');
         }
       } else if (eventType === 'message.update') {
         console.log(`Сообщение обновлено: ${message.messageId}`);

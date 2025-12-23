@@ -10,6 +10,8 @@ export const config = {
   bot: {
     userId: process.env.BOT_USER_ID || 'bot_helper',
     name: process.env.BOT_NAME || 'Helper Bot',
+    autoHandle: process.env.BOT_AUTO_HANDLE === 'true' || false,
+    maxQuestions: parseInt(process.env.BOT_MAX_QUESTIONS || '5', 10),
   },
   chat3: {
     // API URL: базовый URL сервера (библиотека chat3-client может добавлять /api автоматически)
@@ -17,6 +19,13 @@ export const config = {
     apiUrl: process.env.CHAT3_API_URL || 'http://localhost:3000/api',
     apiKey: process.env.CHAT3_API_KEY || '',
     tenantId: process.env.CHAT3_TENANT_ID || 'tnt_default',
+  },
+  gigachat: {
+    clientId: process.env.GIGACHAT_CLIENT_ID || '',
+    clientSecret: process.env.GIGACHAT_CLIENT_SECRET || '',
+    model: process.env.GIGACHAT_MODEL || 'GigaChat-2',
+    temperature: parseFloat(process.env.GIGACHAT_TEMPERATURE || '0.3'),
+    maxTokens: parseInt(process.env.GIGACHAT_MAX_TOKENS || '2000', 10),
   },
 };
 
