@@ -24,8 +24,12 @@ export const config = {
     clientId: process.env.GIGACHAT_CLIENT_ID || '',
     clientSecret: process.env.GIGACHAT_CLIENT_SECRET || '',
     model: process.env.GIGACHAT_MODEL || 'GigaChat-2',
-    temperature: parseFloat(process.env.GIGACHAT_TEMPERATURE || '0.3'),
-    maxTokens: parseInt(process.env.GIGACHAT_MAX_TOKENS || '2000', 10),
+    // Низкая температура для более точной и детерминированной классификации
+    temperature: parseFloat(process.env.GIGACHAT_TEMPERATURE || '0.1'),
+    // Достаточно токенов для JSON ответа с данными
+    maxTokens: parseInt(process.env.GIGACHAT_MAX_TOKENS || '1500', 10),
+    // Top-p для более структурированных ответов (0.1 = более детерминированный)
+    topP: parseFloat(process.env.GIGACHAT_TOP_P || '0.1'),
   },
 };
 

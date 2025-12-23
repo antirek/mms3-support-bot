@@ -74,6 +74,7 @@ async function start() {
           model: config.gigachat.model,
           temperature: config.gigachat.temperature,
           maxTokens: config.gigachat.maxTokens,
+          topP: config.gigachat.topP,
         });
         console.log('AIClassifier инициализирован');
       } else {

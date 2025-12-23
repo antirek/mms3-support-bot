@@ -113,10 +113,16 @@ export class MessageHandler {
         intent: intentResult.intent,
       });
 
-      // Сохраняем категорию и намерение в мета теги
-      if (intentResult.intent && intentResult.intent !== 'default_intent') {
+      // Сохраняем категорию и намерение в мета теги только при успешной классификации
+      // При insufficient_data категорию не устанавливаем, т.к. данных недостаточно
+      if (intentResult.status === 'success' && intentResult.intent && intentResult.intent !== 'default_intent') {
         await this.metaManager.setCategory(dialogId, intentResult.intent);
         await this.metaManager.setLastIntent(dialogId, intentResult.intent);
+        console.log(`Категория ${intentResult.intent} установлена для диалога ${dialogId}`);
+      } else if (intentResult.intent && intentResult.intent !== 'default_intent') {
+        // Сохраняем только lastIntent при insufficient_data, но не категорию
+        await this.metaManager.setLastIntent(dialogId, intentResult.intent);
+        console.log(`LastIntent ${intentResult.intent} установлен для диалога ${dialogId} (категория не установлена, т.к. недостаточно данных)`);
       }
 
       // Обрабатываем результат классификации
@@ -136,20 +142,26 @@ export class MessageHandler {
         return { success: true, handled: true, intent: intentResult.intent, category: intentResult.intent };
       } else if (intentResult.status === 'insufficient_data') {
         // Нужно задать вопросы пользователю
+        console.log('Статус insufficient_data, проверяем необходимость вопроса...');
         const shouldAsk = await this.stateManager.shouldAskQuestion(dialogId, intentResult);
+        console.log(`shouldAsk: ${shouldAsk}, autoHandle: ${config.bot.autoHandle}`);
         
         if (shouldAsk && config.bot.autoHandle) {
           const question = this.stateManager.buildQuestion(intentResult);
+          console.log(`Сформирован вопрос: ${question}`);
           
           if (question) {
             // Получаем или создаем conversationId
             if (!conversationId) {
               conversationId = this.stateManager.createBotConversationId(dialogId);
               await this.metaManager.setBotConversationId(dialogId, conversationId);
+              console.log(`Создан conversationId: ${conversationId}`);
             }
 
             // Отправляем вопрос
+            console.log(`Отправка вопроса в диалог ${dialogId}...`);
             const questionResult = await this.sendResponse(dialogId, question);
+            console.log(`Результат отправки вопроса:`, questionResult);
             
             if (questionResult.success && questionResult.messageId) {
               // Помечаем сообщение как вопрос бота
@@ -159,6 +171,7 @@ export class MessageHandler {
                 intentResult.intent,
                 conversationId
               );
+              console.log(`Сообщение ${questionResult.messageId} помечено как вопрос бота`);
             }
 
             // Устанавливаем флаг ведения ботом
@@ -166,6 +179,15 @@ export class MessageHandler {
             await this.metaManager.setBotConversationId(dialogId, conversationId);
 
             console.log(`Вопрос отправлен в диалог ${dialogId}`);
+          } else {
+            console.warn('Вопрос не сформирован (buildQuestion вернул null)');
+          }
+        } else {
+          if (!shouldAsk) {
+            console.log('Вопрос не задан: shouldAsk = false (возможно, достигнут лимит вопросов)');
+          }
+          if (!config.bot.autoHandle) {
+            console.log('Вопрос не задан: autoHandle = false (установите BOT_AUTO_HANDLE=true)');
           }
         }
 

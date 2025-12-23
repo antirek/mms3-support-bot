@@ -13,6 +13,7 @@ export class AIClassifier {
     this.model = null;
     this.temperature = null;
     this.maxTokens = null;
+    this.topP = null;
     this.jwtToken = null;
     this.tokenExpiresAt = null;
   }
@@ -31,9 +32,12 @@ export class AIClassifier {
 
       this.clientId = clientId;
       this.clientSecret = clientSecret;
-      this.model = options.model || config.gigachat?.model || 'GigaChat-2';
-      this.temperature = options.temperature ?? (config.gigachat?.temperature ?? 0.3);
-      this.maxTokens = options.maxTokens ?? (config.gigachat?.maxTokens ?? 2000);
+      this.model = options.model || config.gigachat?.model || 'GigaChat-2-Max';
+      // Низкая температура (0.1) для более точной классификации намерений
+      this.temperature = options.temperature ?? (config.gigachat?.temperature ?? 0.1);
+      this.maxTokens = options.maxTokens ?? (config.gigachat?.maxTokens ?? 1500);
+      // Top-p для более структурированных ответов
+      this.topP = options.topP ?? (config.gigachat?.topP ?? 0.1);
 
       // Инициализируем AuthClient для получения JWT
       this.authClient = new AuthClient(clientId, clientSecret, { 
@@ -97,33 +101,128 @@ export class AIClassifier {
 СПИСОК ДОСТУПНЫХ НАМЕРЕНИЙ:
 ${intentsJson}
 
-ПРАВИЛА КЛАССИФИКАЦИИ:
-1. Сопоставь запрос пользователя с одним из доступных намерений
-2. Если намерение определено, извлеки данные согласно структуре намерения
-3. Проверь наличие всех обязательных полей (required: true)
+## ЗАДАЧА
+
+Проанализируй запрос пользователя и:
+1. Определи намерение из списка доступных намерений
+2. Извлеки данные согласно структуре определенного намерения
+3. **КРИТИЧЕСКИ ВАЖНО:** Проверь наличие ВСЕХ обязательных полей (required: true)
 4. Верни результат в формате JSON
 
-ФОРМАТ ОТВЕТА:
-Ответ должен быть валидным JSON объектом со следующей структурой:
+## ФОРМАТ ОТВЕТА
+
+Ответ должен быть валидным JSON объектом:
+
 {
   "status": "<статус>",
   "intent": "<идентификатор_намерения>",
   "data": { ... }
 }
 
-СТАТУСЫ:
-- "success": намерение определено и все обязательные данные присутствуют
-- "insufficient_data": намерение определено, но отсутствуют обязательные поля
-- "unknown_intent": намерение не может быть определено (используй дефолтное намерение)
+### Статусы
 
-ПРАВИЛА:
-- Используй только намерения из предоставленного списка
-- Если намерение не найдено, используй дефолтное намерение (intent: "default_intent")
-- Если намерение найдено, но не хватает обязательных полей, верни status: "insufficient_data" и укажи недостающие поля в data.missing_required_fields
-- Типы данных определяй из описания полей
+- **"success"**: Намерение определено И ВСЕ обязательные поля (required: true) присутствуют в data
+- **"insufficient_data"**: Намерение определено, но ОТСУТСТВУЕТ хотя бы одно обязательное поле (required: true)
+- **"unknown_intent"**: Намерение не может быть определено → используй intent: "default_intent"
+
+## КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА ВАЛИДАЦИИ
+
+1. **Проверка обязательных полей:**
+   - После определения намерения, ОБЯЗАТЕЛЬНО проверь все поля с \`required: true\`
+   - Если хотя бы одно обязательное поле отсутствует → status: "insufficient_data"
+   - НЕ возвращай status: "success" если отсутствуют обязательные поля
+   - Проверяй каждое обязательное поле явно перед возвратом результата
+
+2. **Извлечение данных:**
+   - Извлекай значения из запроса пользователя
+   - Используй контекст диалога, если он предоставлен
+   - Если значение не может быть извлечено из запроса или контекста → поле отсутствует
+   - Не придумывай значения для обязательных полей, если их нет в запросе
+
+3. **Статус insufficient_data:**
+   - Используй ТОЛЬКО если намерение определено, но отсутствуют обязательные поля
+   - В data.missing_required_fields укажи массив всех недостающих обязательных полей
+   - В data.comment (опционально) укажи человекочитаемое сообщение о том, какие данные нужны
+
+## ПРАВИЛА КЛАССИФИКАЦИИ
+
+1. Сопоставь запрос пользователя с одним из доступных намерений
+   - Используй описания (description) и примеры (examples) для сопоставления
+   - Учитывай контекст диалога, если он предоставлен
+
+2. Если намерение определено:
+   - Извлеки данные согласно структуре намерения
+   - **Проверь наличие ВСЕХ обязательных полей (required: true)**
+   - Если все обязательные поля присутствуют → status: "success"
+   - Если отсутствует хотя бы одно обязательное поле → status: "insufficient_data"
+
+3. Если намерение не найдено:
+   - status: "unknown_intent"
+   - intent: "default_intent"
+   - data: {} или data: { "comment": "..." }
+
+## ПРИМЕРЫ
+
+### Пример 1: Успешная классификация (все обязательные поля присутствуют)
+Запрос: "Не работает мобильное приложение, ошибка авторизации"
+Результат:
+{
+  "status": "success",
+  "intent": "support_technical",
+  "data": {
+    "issue_type": "авторизация",
+    "device": "мобильное приложение"
+  }
+}
+
+### Пример 2: Недостаточно данных (отсутствует обязательное поле)
+Запрос: "У меня не работает"
+Результат:
+{
+  "status": "insufficient_data",
+  "intent": "support_technical",
+  "data": {
+    "missing_required_fields": ["device", "issue_type"],
+    "comment": "Для обработки технической проблемы необходимо указать устройство (мобильное приложение, веб-сайт, API) и тип проблемы"
+  }
+}
+
+### Пример 3: Частично заполнено (одно обязательное поле отсутствует)
+Запрос: "Не работает мобильное приложение"
+Результат:
+{
+  "status": "insufficient_data",
+  "intent": "support_technical",
+  "data": {
+    "device": "мобильное приложение",
+    "missing_required_fields": ["issue_type"],
+    "comment": "Необходимо указать тип проблемы (авторизация, производительность, функциональность, другое)"
+  }
+}
+
+### Пример 4: Недостаточно данных для billing
+Запрос: "Хочу вернуть деньги"
+Результат:
+{
+  "status": "insufficient_data",
+  "intent": "support_billing",
+  "data": {
+    "missing_required_fields": ["order_id", "reason"],
+    "comment": "Для возврата средств необходимо указать номер заказа и причину возврата"
+  }
+}
+
+## ПРАВИЛА
+
+- Используй ТОЛЬКО намерения из списка выше
+- Если намерение не найдено → status: "unknown_intent", intent: "default_intent"
+- Если намерение найдено, но отсутствуют обязательные поля → status: "insufficient_data"
+- Если намерение найдено и ВСЕ обязательные поля присутствуют → status: "success"
+- Типы данных определяй из описания полей (description)
 - Валидация формата данных на твое усмотрение
-- Возвращай только валидный JSON, без дополнительных комментариев
-- Если запрос содержит контекст предыдущих реплик, учитывай его при классификации`;
+- Возвращай только валидный JSON, без дополнительных комментариев или markdown разметки
+- Если запрос содержит контекст предыдущих реплик, учитывай его при классификации и извлечении данных
+- Не включай поля с null или undefined значениями в data для обязательных полей - если поле отсутствует, не включай его в data`;
   }
 
   /**
@@ -180,8 +279,18 @@ ${contextLines.join('\n')}
         { role: 'user', content: userPrompt }
       ];
 
+      // Параметры для более точной классификации:
+      // - низкая температура (0.1) - более детерминированные ответы
+      // - низкий top_p (0.1) - более структурированные ответы
+      // - достаточный max_tokens для JSON ответа
+      const requestOptions = {
+        temperature: this.temperature,
+        top_p: this.topP,
+        max_tokens: this.maxTokens,
+      };
+
       // Отправляем запрос к GigaChat API
-      const response = await this.apiClient.sendRequest(this.model, messages);
+      const response = await this.apiClient.sendRequest(this.model, messages, requestOptions);
 
       // Парсим ответ
       const parsed = await this.parseAIResponse(response);
@@ -204,7 +313,12 @@ ${contextLines.join('\n')}
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ];
-          const response = await this.apiClient.sendRequest(this.model, messages);
+          const requestOptions = {
+            temperature: this.temperature,
+            top_p: this.topP,
+            max_tokens: this.maxTokens,
+          };
+          const response = await this.apiClient.sendRequest(this.model, messages, requestOptions);
           const parsed = await this.parseAIResponse(response);
           return parsed;
         } catch (retryError) {
