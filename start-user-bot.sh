@@ -7,8 +7,8 @@ export RABBITMQ_URL="amqp://rmuser:rmpassword@192.168.95.8:5672"
 export RABBITMQ_UPDATES_EXCHANGE="chat3_updates"
 
 # Установка переменных окружения для бота
-export BOT_USER_ID="bot_helper"
-export BOT_NAME="Helper Bot"
+export BOT_USER_ID="bot_support"
+export BOT_NAME="Support Bot"
 
 # Установка переменных окружения для Chat3 API
 export CHAT3_API_URL="https://tubo-mms3-tenant-api.services.mobilon.ru/api"

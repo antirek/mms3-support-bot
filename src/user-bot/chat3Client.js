@@ -1,7 +1,5 @@
-// Используем локальную реализацию Chat3Client
-// Если пакет chat3-client установлен, можно заменить импорт
-import { Chat3Client } from './chat3ClientImpl.js';
-import { config } from './config.js';
+import { Chat3Client } from 'chat3-client';
+import { config } from './config.js'; 
 
 /**
  * Клиент для работы с chat3 tenant-api для user-bot
